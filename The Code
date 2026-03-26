@@ -1,0 +1,114 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+
+# --- Problem Definition: Optimal Ambulance Placement ---
+# Finding the best (x, y) location to minimize the distance to all emergencies
+np.random.seed(42)
+num_emergencies = 5
+emergencies = np.random.uniform(10, 90, (num_emergencies, 2))
+
+# Fitness Function: Sum of Euclidean distances
+def fitness(position):
+    return np.sum(np.sqrt(np.sum((emergencies - position)**2, axis=1)))
+
+# --- GWO Parameters ---
+num_wolves = 30
+max_iter = 50
+dim = 2
+lb, ub = 0, 100
+
+# Initialize Wolves
+wolves = np.random.uniform(lb, ub, (num_wolves, dim))
+
+# Initialize Leaders (Alpha, Beta, Delta)
+alpha_pos, alpha_score = np.zeros(dim), float("inf")
+beta_pos, beta_score = np.zeros(dim), float("inf")
+delta_pos, delta_score = np.zeros(dim), float("inf")
+
+# --- Setup Plot ---
+fig, ax = plt.subplots(figsize=(9, 7))
+ax.set_xlim(lb, ub)
+ax.set_ylim(lb, ub)
+ax.set_title("GWO Real-Time Simulation: Optimal Ambulance Placement", fontsize=14, fontweight='bold')
+ax.set_xlabel("X Coordinate")
+ax.set_ylabel("Y Coordinate")
+ax.grid(True, linestyle='--', alpha=0.6)
+
+# Plot Elements (Color-coded as requested)
+emergencies_scatter = ax.scatter(emergencies[:, 0], emergencies[:, 1], c='red', marker='P', s=150, label='Emergencies (Targets)', zorder=2)
+omega_scatter = ax.scatter([], [], c='gray', alpha=0.6, s=40, label='Omega Wolves', zorder=3)
+alpha_scatter = ax.scatter([], [], c='gold', marker='*', s=250, edgecolor='black', label='Alpha Wolf', zorder=5)
+beta_scatter = ax.scatter([], [], c='blue', marker='s', s=120, edgecolor='black', label='Beta Wolf', zorder=4)
+delta_scatter = ax.scatter([], [], c='green', marker='^', s=120, edgecolor='black', label='Delta Wolf', zorder=4)
+
+ax.legend(loc='upper right')
+text_iter = ax.text(2, 95, "", fontsize=12, bbox=dict(facecolor='white', alpha=0.9, edgecolor='black'))
+
+# --- Update Function for Animation ---
+def update(frame):
+    global wolves, alpha_pos, alpha_score, beta_pos, beta_score, delta_pos, delta_score
+
+    # 1. Evaluate and Update Leaders
+    for i in range(num_wolves):
+        fit = fitness(wolves[i])
+        if fit < alpha_score:
+            delta_score, delta_pos = beta_score, beta_pos.copy()
+            beta_score, beta_pos = alpha_score, alpha_pos.copy()
+            alpha_score, alpha_pos = fit, wolves[i].copy()
+        elif fit < beta_score:
+            delta_score, delta_pos = beta_score, beta_pos.copy()
+            beta_score, beta_pos = fit, wolves[i].copy()
+        elif fit < delta_score:
+            delta_score, delta_pos = fit, wolves[i].copy()
+
+    # 2. Update Positions
+    a = 2.0 - frame * (2.0 / max_iter) # a decreases linearly from 2 to 0
+
+    for i in range(num_wolves):
+        for j in range(dim):
+            # Alpha
+            r1, r2 = np.random.rand(), np.random.rand()
+            A1 = 2 * a * r1 - a
+            C1 = 2 * r2
+            D_alpha = abs(C1 * alpha_pos[j] - wolves[i, j])
+            X1 = alpha_pos[j] - A1 * D_alpha
+
+            # Beta
+            r1, r2 = np.random.rand(), np.random.rand()
+            A2 = 2 * a * r1 - a
+            C2 = 2 * r2
+            D_beta = abs(C2 * beta_pos[j] - wolves[i, j])
+            X2 = beta_pos[j] - A2 * D_beta
+
+            # Delta
+            r1, r2 = np.random.rand(), np.random.rand()
+            A3 = 2 * a * r1 - a
+            C3 = 2 * r2
+            D_delta = abs(C3 * delta_pos[j] - wolves[i, j])
+            X3 = delta_pos[j] - A3 * D_delta
+
+            # Move Wolf
+            wolves[i, j] = (X1 + X2 + X3) / 3.0
+            wolves[i, j] = np.clip(wolves[i, j], lb, ub) # Keep within bounds
+
+    # 3. Update Visuals
+    omega_scatter.set_offsets(wolves)
+    alpha_scatter.set_offsets(np.c_[alpha_pos[0], alpha_pos[1]])
+    beta_scatter.set_offsets(np.c_[beta_pos[0], beta_pos[1]])
+    delta_scatter.set_offsets(np.c_[delta_pos[0], delta_pos[1]])
+    
+    text_iter.set_text(f"Iteration: {frame+1}/{max_iter}\nBest Score: {alpha_score:.2f}")
+    
+    if (frame + 1) % 10 == 0 or frame == 0:
+        print(f"Iteration {frame+1:02d} | Best Score: {alpha_score:.4f} | Optimal Location: ({alpha_pos[0]:.2f}, {alpha_pos[1]:.2f})")
+
+    return omega_scatter, alpha_scatter, beta_scatter, delta_scatter, text_iter
+
+# --- Run Animation ---
+print("==================================================")
+print("Starting GWO Simulation for Ambulance Placement...")
+print("==================================================")
+ani = animation.FuncAnimation(fig, update, frames=max_iter, interval=1000, blit=False, repeat=False)
+plt.show()
+print("Simulation Completed Successfully!")
